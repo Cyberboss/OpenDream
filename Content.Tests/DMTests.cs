@@ -164,6 +164,7 @@ namespace Content.Tests
         private static IEnumerable<object[]> GetTests()
         {
             Directory.SetCurrentDirectory(TestProject);
+            var sourceDirectory = Path.GetFullPath(TestProject).Replace('\\', '/').Replace("bin/Content.Tests/DMProject/DMProject", "Content.Tests/DMProject");
 
             foreach (string sourceFile in Directory.GetFiles(TestsDirectory, "*.dm", SearchOption.AllDirectories)) {
                 string sourceFile2 = sourceFile[$"{TestsDirectory}/".Length..];
@@ -174,7 +175,7 @@ namespace Content.Tests
                 yield return new object[] {
                     sourceFile2,
                     Path.GetFullPath($"{sourceFile[..^2]}coverage.xml"),
-                    Path.GetFullPath(TestProject),
+                    sourceDirectory,
                     testFlags
                 };
             }
