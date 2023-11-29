@@ -25,6 +25,8 @@ public sealed class DreamObjectWorld : DreamObject {
     public readonly ViewRange DefaultView;
     public DreamResource? Log;
 
+    private DreamValue _currentTick;
+
     private double TickLag {
         get => _gameTiming.TickPeriod.TotalMilliseconds / 100;
         set => _gameTiming.TickRate = (byte)(1000 / (value * 100));
@@ -85,6 +87,10 @@ public sealed class DreamObjectWorld : DreamObject {
             new DreamValue(ObjectTree.CreateList());
     }
 
+    public void UpdateTick(DreamValue? overrideValue) {
+        _currentTick = overrideValue ?? new DreamValue((_gameTiming.CurTick.Value - DreamManager.InitializedTick.Value) * TickLag);
+    }
+
     protected override void HandleDeletion() {
         base.HandleDeletion();
 
@@ -131,7 +137,7 @@ public sealed class DreamObjectWorld : DreamObject {
                 return true;
 
             case "time":
-                value = new DreamValue((_gameTiming.CurTick.Value - DreamManager.InitializedTick.Value) * TickLag);
+                value = _currentTick;
                 return true;
 
             case "realtime":

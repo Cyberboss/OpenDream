@@ -72,6 +72,7 @@ namespace OpenDreamRuntime {
             // It is now OK to call user code, like /New procs.
             Initialized = true;
             InitializedTick = _gameTiming.CurTick;
+            WorldInstance.UpdateTick(null);
 
             // Call global <init> with waitfor=FALSE
             _objectTree.GlobalInitProc?.Spawn(WorldInstance, new());
@@ -91,11 +92,14 @@ namespace OpenDreamRuntime {
             Initialized = false;
         }
 
-        public void Update() {
+        public void Update(DreamValue? tickOverride = null) {
             if (!Initialized)
                 return;
 
+            WorldInstance.UpdateTick(tickOverride);
+
             _procScheduler.Process();
+
             UpdateStat();
             _dreamMapManager.UpdateTiles();
 

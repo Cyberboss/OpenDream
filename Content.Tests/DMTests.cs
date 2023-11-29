@@ -138,12 +138,14 @@ namespace Content.Tests
             watch.Start();
 
             // Tick until our inner call has finished
+            var tickCount = 0;
             while (!callTask.IsCompleted) {
-                _dreamMan.Update();
+                _dreamMan.Update(new DreamValue(tickCount));
+                ++tickCount;
                 _taskManager.ProcessPendingTasks();
 
-                if (watch.Elapsed.TotalMilliseconds > 500) {
-                    Assert.Fail("Test timed out");
+                if (tickCount > 20000) {
+                    Assert.Fail("Test took too many ticks!");
                 }
             }
 
