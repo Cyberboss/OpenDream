@@ -361,6 +361,8 @@ namespace OpenDreamRuntime.Procs {
             _stack = _dreamValuePool.Rent(other._stack.Length);
             _localVariables = _dreamValuePool.Rent(other._localVariables.Length);
             Array.Copy(other._localVariables, _localVariables, other._localVariables.Length);
+
+            IncrementRefCounts();
         }
 
         public void Initialize(DMProc proc, DreamThread thread, int maxStackSize, DreamObject? instance, DreamObject? usr, DreamProcArguments arguments) {
@@ -376,6 +378,24 @@ namespace OpenDreamRuntime.Procs {
             for (int i = 0; i < ArgumentCount; i++) {
                 _localVariables[i] = arguments.GetArgument(i);
             }
+
+            IncrementRefCounts();
+        }
+
+        private void IncrementRefCounts() {
+            Instance?.IncrementRefCount();
+            Usr?.IncrementRefCount();
+
+            for(var i = 0; i < ArgumentCount; ++i)
+                _localVariables[i].IncrementDreamObjectRefCount();
+        }
+
+        private void DecrementRefCounts() {
+            for(var i = ArgumentCount - 1; i >= 0; --i)
+                _localVariables[i].DecrementDreamObjectRefCount();
+
+            Usr?.DecrementRefCount();
+            Instance?.DecrementRefCount();
         }
 
         public override unsafe ProcStatus Resume() {
@@ -421,6 +441,7 @@ namespace OpenDreamRuntime.Procs {
         }
 
         public override void ReturnedInto(DreamValue value) {
+            value.IncrementDreamObjectRefCount();
             Push(value);
         }
 
@@ -442,6 +463,8 @@ namespace OpenDreamRuntime.Procs {
         }
 
         public void SetReturn(DreamValue value) {
+            value.IncrementDreamObjectRefCount();
+            Result.DecrementDreamObjectRefCount();
             Result = value;
         }
 
@@ -510,6 +533,7 @@ namespace OpenDreamRuntime.Procs {
             _stackIndex = 0;
             _stack = null;
 
+            DecrementRefCounts();
             _dreamValuePool.Return(_localVariables);
             _localVariables = null;
 
@@ -527,6 +551,8 @@ namespace OpenDreamRuntime.Procs {
             if (id < 0 || id >= ArgumentCount)
                 throw new IndexOutOfRangeException($"Given argument id ({id}) was out of range");
 
+            value.IncrementDreamObjectRefCount();
+            _localVariables[id].DecrementDreamObjectRefCount();
             _localVariables[id] = value;
         }
 
@@ -699,24 +725,49 @@ namespace OpenDreamRuntime.Procs {
         }
 
         public void AssignReference(DreamReference reference, DreamValue value) {
+            DreamObject? dreamObject;
             switch (reference.Type) {
-                case DMReference.Type.Self: Result = value; break;
+                case DMReference.Type.Self: Result = value;
+                    value.IncrementDreamObjectRefCount();
+                    Result.DecrementDreamObjectRefCount();
+                    Result = value;
+                    break;
                 case DMReference.Type.Argument: SetArgument(reference.Value, value); break;
-                case DMReference.Type.Local: _localVariables[ArgumentCount + reference.Value] = value; break;
+                case DMReference.Type.Local:
+                    var localIndex = ArgumentCount + reference.Value;
+                    value.IncrementDreamObjectRefCount();
+                    // have to guard against rented previous state here
+                    if (_localVariables[localIndex].TryGetValueAsDreamObject(out dreamObject)
+                        && dreamObject?.Deleted == false)
+                        dreamObject.DecrementRefCount();
+
+                    _localVariables[localIndex] = value;
+                    break;
                 case DMReference.Type.SrcField: Instance.SetVariable(ResolveString(reference.Value), value); break;
-                case DMReference.Type.Global: DreamManager.Globals[reference.Value] = value; break;
+                case DMReference.Type.Global:
+                    value.IncrementDreamObjectRefCount();
+                    DreamManager.Globals[reference.Value].DecrementDreamObjectRefCount();
+                    DreamManager.Globals[reference.Value] = value;
+                    break;
                 case DMReference.Type.Src:
+                    value.IncrementDreamObjectRefCount();
                     //TODO: src can be assigned to non-DreamObject values
+                    var oldInstance = Instance;
                     if (!value.TryGetValueAsDreamObject(out Instance)) {
                         ThrowCannotAssignSrcTo(value);
                     }
 
+                    oldInstance?.DecrementRefCount();
                     break;
                 case DMReference.Type.Usr:
+                    value.IncrementDreamObjectRefCount();
                     //TODO: usr can be assigned to non-DreamObject values
+                    var oldUsr = Usr;
                     if (!value.TryGetValueAsDreamObject(out Usr)) {
                         ThrowCannotAssignUsrTo(value);
                     }
+
+                    oldUsr?.DecrementRefCount();
                     break;
                 case DMReference.Type.Field: {
                     DreamValue owner = Pop();
@@ -729,7 +780,7 @@ namespace OpenDreamRuntime.Procs {
                 case DMReference.Type.ListIndex: {
                     GetIndexReferenceValues(reference, out var index, out var indexing);
 
-                    if (indexing.TryGetValueAsDreamObject(out var dreamObject) && dreamObject != null) {
+                    if (indexing.TryGetValueAsDreamObject(out dreamObject) && dreamObject != null) {
                         dreamObject.OperatorIndexAssign(index, value);
                     } else {
                         ThrowCannotAssignListIndex(index, indexing);

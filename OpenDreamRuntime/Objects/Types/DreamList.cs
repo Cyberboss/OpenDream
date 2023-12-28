@@ -28,6 +28,13 @@ public class DreamList : DreamObject {
     private DreamList(DreamObjectDefinition listDef, List<DreamValue> values, Dictionary<DreamValue, DreamValue>? associativeValues) : base(listDef) {
         _values = values;
         _associativeValues = associativeValues;
+
+        IEnumerable<DreamValue> allContainedValues = values;
+        if (associativeValues != null)
+            allContainedValues = allContainedValues.Concat(associativeValues.Values);
+
+        foreach(var value in allContainedValues)
+            value.IncrementDreamObjectRefCount();
     }
 
     public override void Initialize(DreamProcArguments args) {
@@ -114,6 +121,7 @@ public class DreamList : DreamObject {
     }
 
     public virtual void SetValue(DreamValue key, DreamValue value, bool allowGrowth = false) {
+        value.IncrementDreamObjectRefCount();
         if (key.TryGetValueAsInteger(out int keyInteger)) {
             if (allowGrowth && keyInteger == _values.Count + 1) {
                 _values.Add(value);
@@ -121,10 +129,18 @@ public class DreamList : DreamObject {
                 _values[keyInteger - 1] = value;
             }
         } else {
+            key.IncrementDreamObjectRefCount();
             if (!ContainsValue(key)) _values.Add(key);
 
-            _associativeValues ??= new Dictionary<DreamValue, DreamValue>(1);
+            DreamValue? oldValueNullable = null;
+            if (_associativeValues == null)
+                _associativeValues = new Dictionary<DreamValue, DreamValue>(1);
+            else if (_associativeValues.TryGetValue(key, out var oldValue))
+                oldValueNullable = oldValue;
+
             _associativeValues[key] = value;
+            if (oldValueNullable.HasValue)
+                oldValueNullable.Value.DecrementDreamObjectRefCount();
         }
     }
 
@@ -138,6 +154,7 @@ public class DreamList : DreamObject {
     }
 
     public virtual void AddValue(DreamValue value) {
+        value.IncrementDreamObjectRefCount();
         _values.Add(value);
     }
 
@@ -169,14 +186,19 @@ public class DreamList : DreamObject {
         if (end == 0 || end > (_values.Count + 1)) end = _values.Count + 1;
 
         if (_associativeValues != null) {
-            for (int i = start; i < end; i++)
-                _associativeValues.Remove(_values[i - 1]);
+            for (int i = start; i < end; i++) {
+                var removedValue = _values[i - 1];
+                if (_associativeValues.Remove(removedValue, out var removedAssoc))
+                    removedAssoc.DecrementDreamObjectRefCount();
+                removedValue.DecrementDreamObjectRefCount();
+            }
         }
 
         _values.RemoveRange(start - 1, end - start);
     }
 
     public void Insert(int index, DreamValue value) {
+        value.IncrementDreamObjectRefCount();
         _values.Insert(index - 1, value);
     }
 
@@ -375,6 +397,18 @@ public class DreamList : DreamObject {
 
         return DreamValue.True;
     }
+
+    protected override void HandleDeletion() {
+        base.HandleDeletion();
+
+        if (_associativeValues != null)
+            foreach (var assocValue in _associativeValues.Values)
+                assocValue.DecrementDreamObjectRefCount();
+
+        foreach (var value in _values)
+            value.DecrementDreamObjectRefCount();
+    }
+
     #endregion Operators
 }
 
@@ -441,6 +475,12 @@ sealed class DreamListVars : DreamList {
 
     public override bool IsSaved(string name) {
         return _dreamObject.IsSaved(name);
+    }
+
+    protected override void HandleDeletion() {
+        base.HandleDeletion();
+
+        _dreamObject.DecrementRefCount();
     }
 }
 

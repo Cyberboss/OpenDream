@@ -49,6 +49,13 @@ namespace OpenDreamRuntime.Procs {
                 Usr = usr;
                 arguments.Values.CopyTo(_arguments);
                 _argumentCount = arguments.Count;
+
+                src?.IncrementRefCount();
+
+                usr?.IncrementRefCount();
+
+                foreach (var arg in arguments.Values)
+                    arg.IncrementDreamObjectRefCount();
             }
 
             // Used to avoid reentrant resumptions in our proc
@@ -169,7 +176,7 @@ namespace OpenDreamRuntime.Procs {
         private readonly Dictionary<string, DreamValue>? _defaultArgumentValues;
         private readonly Func<State, Task<DreamValue>> _taskFunc;
 
-        public AsyncNativeProc(int id, TreeEntry owningType, string name, List<string> argumentNames, Dictionary<string, DreamValue> defaultArgumentValues, Func<State, Task<DreamValue>> taskFunc)
+        public AsyncNativeProc(int id, TreeEntry owningType, string name, List<string> argumentNames, Dictionary<string, DreamValue>? defaultArgumentValues, Func<State, Task<DreamValue>> taskFunc)
             : base(id, owningType, name, null, ProcAttributes.None, argumentNames, null, null, null, null, 0) {
             _defaultArgumentValues = defaultArgumentValues;
             _taskFunc = taskFunc;

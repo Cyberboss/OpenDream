@@ -12,6 +12,8 @@ using Robust.Server.Player;
 using Robust.Shared.Map;
 using Robust.Shared.Serialization.Manager;
 using Robust.Shared.Utility;
+using System.Diagnostics;
+using OpenDreamRuntime.Procs.Native;
 
 namespace OpenDreamRuntime.Objects {
     [Virtual]
@@ -20,6 +22,9 @@ namespace OpenDreamRuntime.Objects {
 
         [Access(typeof(DreamObject))]
         public bool Deleted;
+
+        [Access(typeof(DreamObject), typeof(DreamObjectExtensions), typeof(DreamProcNativeRoot))]
+        public ulong RefCount;
 
         public virtual bool ShouldCallNew => true;
 
@@ -97,8 +102,14 @@ namespace OpenDreamRuntime.Objects {
 
             Tag = null;
             Deleted = true;
+
             //we release all relevant information, making this a very tiny object
-            Variables = null;
+            if (Variables != null) {
+                foreach (var value in Variables.Values)
+                    value.DecrementDreamObjectRefCount();
+
+                Variables = null;
+            }
 
             ObjectDefinition = null!;
         }
@@ -109,6 +120,8 @@ namespace OpenDreamRuntime.Objects {
 
             if (TryGetProc("Del", out var delProc))
                 DreamThread.Run(delProc, this, null);
+
+            RefCount = 0;
 
             HandleDeletion();
         }
@@ -428,6 +441,26 @@ namespace OpenDreamRuntime.Objects {
             }
 
             return ObjectDefinition.Type;
+        }
+    }
+
+    public static class DreamObjectExtensions {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void IncrementRefCount(this DreamObject dreamObject) {
+            Debug.Assert(!dreamObject.Deleted, "Invalid attempt at incrementing RefCount on a deleted DreamObject");
+
+            ++dreamObject.RefCount;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void DecrementRefCount(this DreamObject dreamObject) {
+            Debug.Assert(!dreamObject.Deleted, "Invalid attempt at decrementing RefCount on a deleted DreamObject");
+
+            var result = --dreamObject.RefCount;
+
+            Debug.Assert(result >= 0, "Invalid attempt at decrementing DreamObject's refcount when it is at (or below) 0");
+            if (result == 0)
+                dreamObject.Delete();
         }
     }
 }

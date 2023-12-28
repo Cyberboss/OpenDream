@@ -32,6 +32,11 @@ namespace OpenDreamRuntime.Procs {
             arguments.Values.CopyTo(_arguments);
             _argumentCount = arguments.Count;
             _stage = Stage.Init;
+
+            dreamObject.IncrementRefCount();
+            usr?.IncrementRefCount();
+            foreach(var arg in arguments.Values)
+                arg.IncrementDreamObjectRefCount();
         }
 
         private DreamObject _dreamObject;
