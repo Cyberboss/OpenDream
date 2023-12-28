@@ -1811,6 +1811,18 @@ namespace OpenDreamRuntime.Procs.Native {
             return new DreamValue(bundle.DreamManager.CreateRef(bundle.GetArgument(0, "Object")));
         }
 
+        [DreamProc("refcount")]
+        [DreamProcParameter("Object", Type = DreamValueTypeFlag.DreamObject)]
+        public static DreamValue NativeProc_refcount(NativeProc.Bundle bundle, DreamObject? src, DreamObject? usr) {
+            var arg = bundle.GetArgument(0, "Object");
+            var refs = 0UL;
+            if (arg.TryGetValueAsDreamObject(out var dreamObject)) {
+                refs = dreamObject.RefCount;
+            }
+
+            return new DreamValue(refs);
+        }
+
         [DreamProc("regex")]
         [DreamProcParameter("pattern", Type = DreamValueTypeFlag.String | DreamValueTypeFlag.DreamObject)]
         [DreamProcParameter("flags", Type = DreamValueTypeFlag.Float)]

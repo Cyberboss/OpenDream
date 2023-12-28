@@ -72,6 +72,7 @@ proc/rand(L, H)
 proc/rand_seed(Seed)
 proc/range(Dist, Center)
 proc/ref(Object)
+proc/refcount(Object)
 proc/replacetext(Haystack, Needle, Replacement, Start = 1, End = 0)
 proc/replacetextEx(Haystack, Needle, Replacement, Start = 1, End = 0)
 proc/rgb(R, G, B, A)
@@ -219,9 +220,3 @@ proc/lentext(T)
 
 proc/winshow(player, window, show=1)
 	winset(player, window, "is-visible=[show ? "true" : "false"]")
-
-proc/refcount(var/Object)
-	// woah that's a lot of refs
-	// i wonder if it's true??
-	return 100
-	// (it's not)

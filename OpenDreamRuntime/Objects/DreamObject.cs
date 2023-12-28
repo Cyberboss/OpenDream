@@ -12,6 +12,8 @@ using Robust.Server.Player;
 using Robust.Shared.Map;
 using Robust.Shared.Serialization.Manager;
 using Robust.Shared.Utility;
+using System.Threading;
+using OpenDreamRuntime.Procs.DebugAdapter.Protocol;
 
 namespace OpenDreamRuntime.Objects {
     [Virtual]
@@ -20,6 +22,8 @@ namespace OpenDreamRuntime.Objects {
 
         [Access(typeof(DreamObject))]
         public bool Deleted;
+
+        public ulong RefCount { get; private set; }
 
         public virtual bool ShouldCallNew => true;
 
@@ -97,8 +101,14 @@ namespace OpenDreamRuntime.Objects {
 
             Tag = null;
             Deleted = true;
+
             //we release all relevant information, making this a very tiny object
-            Variables = null;
+            if (Variables != null) {
+                foreach (var value in Variables.Values)
+                    value.DecrementDreamObjectRefCount();
+
+                Variables = null;
+            }
 
             ObjectDefinition = null!;
         }
@@ -109,6 +119,8 @@ namespace OpenDreamRuntime.Objects {
 
             if (TryGetProc("Del", out var delProc))
                 DreamThread.Run(delProc, this, null);
+
+            RefCount = 0;
 
             HandleDeletion();
         }
@@ -428,6 +440,21 @@ namespace OpenDreamRuntime.Objects {
             }
 
             return ObjectDefinition.Type;
+        }
+
+        public void IncrementRefCount() {
+            if (Deleted)
+                throw new InvalidOperationException("Invalid attempt at incrementing RefCount on a deleted DreamObject");
+
+            ++RefCount;
+        }
+        public void DecrementRefCount() {
+            if (Deleted) throw new Exception("Invalid attempt at decrementing RefCount on a deleted DreamObject");
+            if (RefCount == 0) throw new Exception("Invalid attempt at decrementing DreamObject's refcount when it is at 0");
+
+            if (--RefCount == 0) {
+                Delete();
+            }
         }
     }
 }

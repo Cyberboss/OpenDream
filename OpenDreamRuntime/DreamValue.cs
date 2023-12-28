@@ -436,6 +436,23 @@ namespace OpenDreamRuntime {
         public static bool operator !=(DreamValue a, DreamValue b) {
             return !a.Equals(b);
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void IncrementDreamObjectRefCount() {
+            if (Type == DreamValueType.DreamObject && _refValue != null) {
+                DreamObject obj = (DreamObject)_refValue;
+                obj.IncrementRefCount();
+            }
+        }
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DecrementDreamObjectRefCount() {
+            if (Type == DreamValueType.DreamObject && _refValue != null) {
+                DreamObject obj = (DreamObject)_refValue;
+                obj.DecrementRefCount();
+            }
+        }
     }
 
     #region Serialization
